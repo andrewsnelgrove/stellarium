@@ -50,16 +50,19 @@
 #include <QStringList>
 #include <QRegExp>
 #include <QDir>
+#include <QMessageBox>
 
 // Define version of valid Stellarium DSO Catalog
 // This number must be incremented each time the content or file format of the stars catalogs change
-static const QString StellariumDSOCatalogVersion = "3.8";
+static const QString StellariumDSOCatalogVersion = "3.11";
 
 void NebulaMgr::setLabelsColor(const Vec3f& c) {Nebula::labelColor = c; emit labelsColorChanged(c);}
 const Vec3f NebulaMgr::getLabelsColor(void) const {return Nebula::labelColor;}
 void NebulaMgr::setCirclesColor(const Vec3f& c) {Nebula::hintColorMap.insert(Nebula::NebUnknown, c); emit circlesColorChanged(c); }
 const Vec3f NebulaMgr::getCirclesColor(void) const {return Nebula::hintColorMap.value(Nebula::NebUnknown);}
-void NebulaMgr::setGalaxyColor(const Vec3f& c) {Nebula::hintColorMap.insert(Nebula::NebGx, c); emit galaxiesColorChanged(c); }
+void NebulaMgr::setRegionsColor(const Vec3f& c) {Nebula::hintColorMap.insert(Nebula::NebRegion, c); emit regionsColorChanged(c); }
+const Vec3f NebulaMgr::getRegionsColor(void) const {return Nebula::hintColorMap.value(Nebula::NebRegion);}
+void NebulaMgr::setGalaxyColor(const Vec3f& c) {Nebula::hintColorMap.insert(Nebula::NebGx, c); Nebula::hintColorMap.insert(Nebula::NebPartOfGx, c); emit galaxiesColorChanged(c); }
 const Vec3f NebulaMgr::getGalaxyColor(void) const {return Nebula::hintColorMap.value(Nebula::NebGx);}
 void NebulaMgr::setRadioGalaxyColor(const Vec3f& c) {Nebula::hintColorMap.insert(Nebula::NebRGx, c); emit radioGalaxiesColorChanged(c); }
 const Vec3f NebulaMgr::getRadioGalaxyColor(void) const {return Nebula::hintColorMap.value(Nebula::NebRGx);}
@@ -150,6 +153,7 @@ NebulaMgr::~NebulaMgr()
 {
 	Nebula::texCircle = StelTextureSP();
 	Nebula::texCircleLarge = StelTextureSP();
+	Nebula::texRegion = StelTextureSP();
 	Nebula::texGalaxy = StelTextureSP();
 	Nebula::texGalaxyLarge = StelTextureSP();
 	Nebula::texOpenCluster = StelTextureSP();
@@ -189,7 +193,9 @@ void NebulaMgr::init()
 	// Load circle texture
 	Nebula::texCircle		= StelApp::getInstance().getTextureManager().createTexture(StelFileMgr::getInstallationDir()+"/textures/neb.png");
 	// Load circle texture for large DSO
-	Nebula::texCircleLarge		= StelApp::getInstance().getTextureManager().createTexture(StelFileMgr::getInstallationDir()+"/textures/neb_lrg.png");
+	Nebula::texCircleLarge	= StelApp::getInstance().getTextureManager().createTexture(StelFileMgr::getInstallationDir()+"/textures/neb_lrg.png");
+	// Load dashed shape texture
+	Nebula::texRegion		= StelApp::getInstance().getTextureManager().createTexture(StelFileMgr::getInstallationDir()+"/textures/neb_reg.png");
 	// Load ellipse texture
 	Nebula::texGalaxy		= StelApp::getInstance().getTextureManager().createTexture(StelFileMgr::getInstallationDir()+"/textures/neb_gal.png");
 	// Load ellipse texture for large galaxies
@@ -298,50 +304,51 @@ void NebulaMgr::init()
 	}
 
 	// Set colors for markers
-	setLabelsColor(StelUtils::strToVec3f(conf->value("color/dso_label_color", "0.2,0.6,0.7").toString()));
-	setCirclesColor(StelUtils::strToVec3f(conf->value("color/dso_circle_color", "1.0,0.7,0.2").toString()));
+	setLabelsColor(Vec3f(conf->value("color/dso_label_color", "0.2,0.6,0.7").toString()));
+	setCirclesColor(Vec3f(conf->value("color/dso_circle_color", "1.0,0.7,0.2").toString()));
+	setRegionsColor(Vec3f(conf->value("color/dso_region_color", "0.7,0.7,0.2").toString()));
 
 	QString defaultGalaxyColor = conf->value("color/dso_galaxy_color", "1.0,0.2,0.2").toString();
-	setGalaxyColor(StelUtils::strToVec3f(defaultGalaxyColor));
-	setRadioGalaxyColor(StelUtils::strToVec3f(conf->value("color/dso_radio_galaxy_color", "0.3,0.3,0.3").toString()));
-	setActiveGalaxyColor(StelUtils::strToVec3f(conf->value("color/dso_active_galaxy_color", "1.0,0.5,0.2").toString()));
-	setInteractingGalaxyColor(StelUtils::strToVec3f(conf->value("color/dso_interacting_galaxy_color", "0.2,0.5,1.0").toString()));
-	setGalaxyClusterColor(StelUtils::strToVec3f(conf->value("color/dso_galaxy_cluster_color", "0.2,0.8,1.0").toString()));
-	setQuasarColor(StelUtils::strToVec3f(conf->value("color/dso_quasar_color", defaultGalaxyColor).toString()));
-	setPossibleQuasarColor(StelUtils::strToVec3f(conf->value("color/dso_possible_quasar_color", defaultGalaxyColor).toString()));
-	setBlLacObjectColor(StelUtils::strToVec3f(conf->value("color/dso_bl_lac_color", defaultGalaxyColor).toString()));
-	setBlazarColor(StelUtils::strToVec3f(conf->value("color/dso_blazar_color", defaultGalaxyColor).toString()));
+	setGalaxyColor(           Vec3f(defaultGalaxyColor));
+	setRadioGalaxyColor(      Vec3f(conf->value("color/dso_radio_galaxy_color", "0.3,0.3,0.3").toString()));
+	setActiveGalaxyColor(     Vec3f(conf->value("color/dso_active_galaxy_color", "1.0,0.5,0.2").toString()));
+	setInteractingGalaxyColor(Vec3f(conf->value("color/dso_interacting_galaxy_color", "0.2,0.5,1.0").toString()));
+	setGalaxyClusterColor(    Vec3f(conf->value("color/dso_galaxy_cluster_color", "0.2,0.8,1.0").toString()));
+	setQuasarColor(           Vec3f(conf->value("color/dso_quasar_color", defaultGalaxyColor).toString()));
+	setPossibleQuasarColor(   Vec3f(conf->value("color/dso_possible_quasar_color", defaultGalaxyColor).toString()));
+	setBlLacObjectColor(      Vec3f(conf->value("color/dso_bl_lac_color", defaultGalaxyColor).toString()));
+	setBlazarColor(           Vec3f(conf->value("color/dso_blazar_color", defaultGalaxyColor).toString()));
 
 	QString defaultNebulaColor = conf->value("color/dso_nebula_color", "0.1,1.0,0.1").toString();
-	setNebulaColor(StelUtils::strToVec3f(defaultNebulaColor));
-	setPlanetaryNebulaColor(StelUtils::strToVec3f(conf->value("color/dso_planetary_nebula_color", defaultNebulaColor).toString()));
-	setReflectionNebulaColor(StelUtils::strToVec3f(conf->value("color/dso_reflection_nebula_color", defaultNebulaColor).toString()));
-	setBipolarNebulaColor(StelUtils::strToVec3f(conf->value("color/dso_bipolar_nebula_color", defaultNebulaColor).toString()));
-	setEmissionNebulaColor(StelUtils::strToVec3f(conf->value("color/dso_emission_nebula_color", defaultNebulaColor).toString()));
-	setDarkNebulaColor(StelUtils::strToVec3f(conf->value("color/dso_dark_nebula_color", "0.3,0.3,0.3").toString()));
-	setHydrogenRegionColor(StelUtils::strToVec3f(conf->value("color/dso_hydrogen_region_color", defaultNebulaColor).toString()));
-	setSupernovaRemnantColor(StelUtils::strToVec3f(conf->value("color/dso_supernova_remnant_color", defaultNebulaColor).toString()));
-	setSupernovaCandidateColor(StelUtils::strToVec3f(conf->value("color/dso_supernova_candidate_color", defaultNebulaColor).toString()));
-	setSupernovaRemnantCandidateColor(StelUtils::strToVec3f(conf->value("color/dso_supernova_remnant_cand_color", defaultNebulaColor).toString()));
-	setInterstellarMatterColor(StelUtils::strToVec3f(conf->value("color/dso_interstellar_matter_color", defaultNebulaColor).toString()));
-	setClusterWithNebulosityColor(StelUtils::strToVec3f(conf->value("color/dso_cluster_with_nebulosity_color", defaultNebulaColor).toString()));
-	setMolecularCloudColor(StelUtils::strToVec3f(conf->value("color/dso_molecular_cloud_color", defaultNebulaColor).toString()));
-	setPossiblePlanetaryNebulaColor(StelUtils::strToVec3f(conf->value("color/dso_possible_planetary_nebula_color", defaultNebulaColor).toString()));
-	setProtoplanetaryNebulaColor(StelUtils::strToVec3f(conf->value("color/dso_protoplanetary_nebula_color", defaultNebulaColor).toString()));
+	setNebulaColor(                   Vec3f(defaultNebulaColor));
+	setPlanetaryNebulaColor(          Vec3f(conf->value("color/dso_planetary_nebula_color", defaultNebulaColor).toString()));
+	setReflectionNebulaColor(         Vec3f(conf->value("color/dso_reflection_nebula_color", defaultNebulaColor).toString()));
+	setBipolarNebulaColor(            Vec3f(conf->value("color/dso_bipolar_nebula_color", defaultNebulaColor).toString()));
+	setEmissionNebulaColor(           Vec3f(conf->value("color/dso_emission_nebula_color", defaultNebulaColor).toString()));
+	setDarkNebulaColor(               Vec3f(conf->value("color/dso_dark_nebula_color", "0.3,0.3,0.3").toString()));
+	setHydrogenRegionColor(           Vec3f(conf->value("color/dso_hydrogen_region_color", defaultNebulaColor).toString()));
+	setSupernovaRemnantColor(         Vec3f(conf->value("color/dso_supernova_remnant_color", defaultNebulaColor).toString()));
+	setSupernovaCandidateColor(       Vec3f(conf->value("color/dso_supernova_candidate_color", defaultNebulaColor).toString()));
+	setSupernovaRemnantCandidateColor(Vec3f(conf->value("color/dso_supernova_remnant_cand_color", defaultNebulaColor).toString()));
+	setInterstellarMatterColor(       Vec3f(conf->value("color/dso_interstellar_matter_color", defaultNebulaColor).toString()));
+	setClusterWithNebulosityColor(    Vec3f(conf->value("color/dso_cluster_with_nebulosity_color", defaultNebulaColor).toString()));
+	setMolecularCloudColor(           Vec3f(conf->value("color/dso_molecular_cloud_color", defaultNebulaColor).toString()));
+	setPossiblePlanetaryNebulaColor(  Vec3f(conf->value("color/dso_possible_planetary_nebula_color", defaultNebulaColor).toString()));
+	setProtoplanetaryNebulaColor(     Vec3f(conf->value("color/dso_protoplanetary_nebula_color", defaultNebulaColor).toString()));
 
 	QString defaultClusterColor = conf->value("color/dso_cluster_color", "1.0,1.0,0.1").toString();
-	setClusterColor(StelUtils::strToVec3f(defaultClusterColor));
-	setOpenClusterColor(StelUtils::strToVec3f(conf->value("color/dso_open_cluster_color", defaultClusterColor).toString()));
-	setGlobularClusterColor(StelUtils::strToVec3f(conf->value("color/dso_globular_cluster_color", defaultClusterColor).toString()));
-	setStellarAssociationColor(StelUtils::strToVec3f(conf->value("color/dso_stellar_association_color", defaultClusterColor).toString()));
-	setStarCloudColor(StelUtils::strToVec3f(conf->value("color/dso_star_cloud_color", defaultClusterColor).toString()));
+	setClusterColor(           Vec3f(defaultClusterColor));
+	setOpenClusterColor(       Vec3f(conf->value("color/dso_open_cluster_color", defaultClusterColor).toString()));
+	setGlobularClusterColor(   Vec3f(conf->value("color/dso_globular_cluster_color", defaultClusterColor).toString()));
+	setStellarAssociationColor(Vec3f(conf->value("color/dso_stellar_association_color", defaultClusterColor).toString()));
+	setStarCloudColor(         Vec3f(conf->value("color/dso_star_cloud_color", defaultClusterColor).toString()));
 
 	QString defaultStellarColor = conf->value("color/dso_star_color", "1.0,0.7,0.2").toString();
-	setStarColor(StelUtils::strToVec3f(defaultStellarColor));
-	setSymbioticStarColor(StelUtils::strToVec3f(conf->value("color/dso_symbiotic_star_color", defaultStellarColor).toString()));
-	setEmissionLineStarColor(StelUtils::strToVec3f(conf->value("color/dso_emission_star_color", defaultStellarColor).toString()));
-	setEmissionObjectColor(StelUtils::strToVec3f(conf->value("color/dso_emission_object_color", defaultStellarColor).toString()));
-	setYoungStellarObjectColor(StelUtils::strToVec3f(conf->value("color/dso_young_stellar_object_color", defaultStellarColor).toString()));
+	setStarColor(              Vec3f(defaultStellarColor));
+	setSymbioticStarColor(     Vec3f(conf->value("color/dso_symbiotic_star_color", defaultStellarColor).toString()));
+	setEmissionLineStarColor(  Vec3f(conf->value("color/dso_emission_star_color", defaultStellarColor).toString()));
+	setEmissionObjectColor(    Vec3f(conf->value("color/dso_emission_object_color", defaultStellarColor).toString()));
+	setYoungStellarObjectColor(Vec3f(conf->value("color/dso_young_stellar_object_color", defaultStellarColor).toString()));
 
 	// for DSO convertor (for developers!)
 	flagConverter = conf->value("devel/convert_dso_catalog", false).toBool();
@@ -395,15 +402,23 @@ void NebulaMgr::init()
 	if (conf->value("flag_show_aco", false).toBool())
 		catalogFilters	|= Nebula::CatACO;
 	if (conf->value("flag_show_hcg", false).toBool())
-		catalogFilters	|= Nebula::CatHCG;
-	if (conf->value("flag_show_abell", false).toBool())
-		catalogFilters	|= Nebula::CatAbell;
+		catalogFilters	|= Nebula::CatHCG;	
 	if (conf->value("flag_show_eso", false).toBool())
 		catalogFilters	|= Nebula::CatESO;
 	if (conf->value("flag_show_vdbh", false).toBool())
 		catalogFilters	|= Nebula::CatVdBH;
 	if (conf->value("flag_show_dwb", false).toBool())
 		catalogFilters	|= Nebula::CatDWB;
+	if (conf->value("flag_show_tr", false).toBool())
+		catalogFilters	|= Nebula::CatTr;
+	if (conf->value("flag_show_st", false).toBool())
+		catalogFilters	|= Nebula::CatSt;
+	if (conf->value("flag_show_ru", false).toBool())
+		catalogFilters	|= Nebula::CatRu;
+	if (conf->value("flag_show_vdbha", false).toBool())
+		catalogFilters	|= Nebula::CatVdBHa;
+	if (conf->value("flag_show_other", true).toBool())
+		catalogFilters	|= Nebula::CatOther;
 	conf->endGroup();
 
 	// NB: nebula set loaded inside setter of catalog filter
@@ -729,11 +744,11 @@ NebulaP NebulaMgr::search(const QString& name)
 	}
 
 	// If no match found, try search by catalog reference
-	static QRegExp catNumRx("^(M|NGC|IC|C|B|VDB|RCW|LDN|LBN|CR|MEL|PGC|UGC|ARP|VV|ABELL|DWB)\\s*(\\d+)$");
+	static QRegExp catNumRx("^(M|NGC|IC|C|B|VDB|RCW|LDN|LBN|CR|MEL|PGC|UGC|ARP|VV|DWB|TR|TRUMPLER|ST|STOCK|RU|RUPRECHT|VDB-HA)\\s*(\\d+)$");
 	if (catNumRx.exactMatch(uname))
 	{
-		QString cat = catNumRx.capturedTexts().at(1);
-		unsigned int num = catNumRx.capturedTexts().at(2).toUInt();
+		QString cat = catNumRx.cap(1);
+		unsigned int num = catNumRx.cap(2).toUInt();
 
 		//qWarning() << "[SEARCH]" << cat << num;
 
@@ -742,6 +757,7 @@ NebulaP NebulaMgr::search(const QString& name)
 		if (cat == "IC") return searchIC(num);
 		if (cat == "C") return searchC(num);
 		if (cat == "B") return searchB(num);
+		if (cat == "VDB-HA") return searchVdBHa(num);
 		if (cat == "VDB") return searchVdB(num);
 		if (cat == "RCW") return searchRCW(num);
 		if (cat == "LDN") return searchLDN(num);
@@ -751,27 +767,29 @@ NebulaP NebulaMgr::search(const QString& name)
 		if (cat == "PGC") return searchPGC(num);
 		if (cat == "UGC") return searchUGC(num);
 		if (cat == "ARP") return searchArp(num);
-		if (cat == "VV") return searchVV(num);
-		if (cat == "ABELL") return searchAbell(num);
+		if (cat == "VV") return searchVV(num);		
 		if (cat == "DWB") return searchDWB(num);
+		if (cat == "TR" || cat == "TRUMPLER") return searchTr(num);
+		if (cat == "ST" || cat == "STOCK") return searchSt(num);
+		if (cat == "RU" || cat == "RUPRECHT") return searchRu(num);
 	}
 	static QRegExp dCatNumRx("^(SH)\\s*\\d-\\s*(\\d+)$");
 	if (dCatNumRx.exactMatch(uname))
 	{
-		QString dcat = dCatNumRx.capturedTexts().at(1);
-		unsigned int dnum = dCatNumRx.capturedTexts().at(2).toUInt();
+		QString dcat = dCatNumRx.cap(1);
+		unsigned int dnum = dCatNumRx.cap(2).toUInt();
 
 		if (dcat == "SH") return searchSh2(dnum);
 	}
-	static QRegExp sCatNumRx("^(CED|PK|ACO|HCG|ESO|VDBH)\\s*(.+)$");
+	static QRegExp sCatNumRx("^(CED|PK|ACO|ABELL|HCG|ESO|VDBH)\\s*(.+)$");
 	if (sCatNumRx.exactMatch(uname))
 	{
-		QString cat = sCatNumRx.capturedTexts().at(1);
-		QString num = sCatNumRx.capturedTexts().at(2).trimmed();
+		QString cat = sCatNumRx.cap(1);
+		QString num = sCatNumRx.cap(2).trimmed();
 
 		if (cat == "CED") return searchCed(num);
 		if (cat == "PK") return searchPK(num);
-		if (cat == "ACO") return searchACO(num);
+		if (cat == "ACO" || cat == "ABELL") return searchACO(num);
 		if (cat == "HCG") return searchHCG(num);
 		if (cat == "ESO") return searchESO(num);
 		if (cat == "VDBH") return searchVdBH(num);
@@ -779,8 +797,8 @@ NebulaP NebulaMgr::search(const QString& name)
 	static QRegExp gCatNumRx("^(PN|SNR)\\s*G(.+)$");
 	if (gCatNumRx.exactMatch(uname))
 	{
-		QString cat = gCatNumRx.capturedTexts().at(1);
-		QString num = gCatNumRx.capturedTexts().at(2).trimmed();
+		QString cat = gCatNumRx.cap(1);
+		QString num = gCatNumRx.cap(2).trimmed();
 
 		if (cat == "PN") return searchPNG(num);
 		if (cat == "SNR") return searchSNRG(num);
@@ -803,7 +821,7 @@ void NebulaMgr::loadNebulaSet(const QString& setName)
 		if (!srcCatalogPath.isEmpty())
 			convertDSOCatalog(srcCatalogPath, StelFileMgr::findFile("nebulae/" + setName + "/catalog.pack", StelFileMgr::New), flagDecimalCoordinates);
 		else
-			qWarning() << "ERROR convert catalogue, because source data set is not exists for " << setName;
+			qWarning() << "ERROR convert catalogue, because source data set does not exist for " << setName;
 	}
 
 	if (dsoCatalogPath.isEmpty())
@@ -923,6 +941,14 @@ NebulaP NebulaMgr::searchVdB(unsigned int VdB) const
 {
 	for (const auto& n : dsoArray)
 		if (n->VdB_nb == VdB)
+			return n;
+	return NebulaP();
+}
+
+NebulaP NebulaMgr::searchVdBHa(unsigned int VdBHa) const
+{
+	for (const auto& n : dsoArray)
+		if (n->VdBHa_nb == VdBHa)
 			return n;
 	return NebulaP();
 }
@@ -1047,14 +1073,6 @@ NebulaP NebulaMgr::searchHCG(QString HCG) const
 	return NebulaP();
 }
 
-NebulaP NebulaMgr::searchAbell(unsigned int Abell) const
-{
-	for (const auto& n : dsoArray)
-		if (n->Abell_nb == Abell)
-			return n;
-	return NebulaP();
-}
-
 NebulaP NebulaMgr::searchESO(QString ESO) const
 {
 	for (const auto& n : dsoArray)
@@ -1075,6 +1093,30 @@ NebulaP NebulaMgr::searchDWB(unsigned int DWB) const
 {
 	for (const auto& n : dsoArray)
 		if (n->DWB_nb == DWB)
+			return n;
+	return NebulaP();
+}
+
+NebulaP NebulaMgr::searchTr(unsigned int Tr) const
+{
+	for (const auto& n : dsoArray)
+		if (n->Tr_nb == Tr)
+			return n;
+	return NebulaP();
+}
+
+NebulaP NebulaMgr::searchSt(unsigned int St) const
+{
+	for (const auto& n : dsoArray)
+		if (n->St_nb == St)
+			return n;
+	return NebulaP();
+}
+
+NebulaP NebulaMgr::searchRu(unsigned int Ru) const
+{
+	for (const auto& n : dsoArray)
+		if (n->Ru_nb == Ru)
 			return n;
 	return NebulaP();
 }
@@ -1111,7 +1153,7 @@ void NebulaMgr::convertDSOCatalog(const QString &in, const QString &out, bool de
 	QString record;
 	while (!dsoIn.atEnd())
 	{
-		dsoIn.readLine();
+		dsoIn.readLine();		
 		++totalRecords;
 	}
 
@@ -1121,32 +1163,35 @@ void NebulaMgr::convertDSOCatalog(const QString &in, const QString &out, bool de
 	QDataStream dsoOutStream(&dsoOut);
 	dsoOutStream.setVersion(QDataStream::Qt_5_2);
 
-	int	id, orientationAngle, NGC, IC, M, C, B, Sh2, VdB, RCW, LDN, LBN, Cr, Mel, PGC, UGC, Arp, VV, Abell, DWB;
+	int	id, orientationAngle, NGC, IC, M, C, B, Sh2, VdB, RCW, LDN, LBN, Cr, Mel, PGC, UGC, Arp, VV, DWB, Tr, St, Ru, VdBHa;
 	float	raRad, decRad, bMag, vMag, majorAxisSize, minorAxisSize, dist, distErr, z, zErr, plx, plxErr;
 	QString oType, mType, Ced, PK, PNG, SNRG, ACO, HCG, ESO, VdBH, ra, dec;
 	Nebula::NebulaType nType;
 
-	int currentLineNumber = 0;	// what input line we are on
-	int currentRecordNumber = 0;	// what record number we are on
 	int readOk = 0;				// how many records weree rad without problems
 	while (!dsoIn.atEnd())
 	{
 		record = QString::fromUtf8(dsoIn.readLine());
-		++currentLineNumber;
 
 		QRegExp version("ersion\\s+([\\d\\.]+)\\s+(\\w+)");
 		int vp = version.indexIn(record);
 		if (vp!=-1) // Version of catalog, a first line!
-			dsoOutStream << version.capturedTexts().at(1).trimmed() << version.capturedTexts().at(2).trimmed();
+			dsoOutStream << version.cap(1).trimmed() << version.cap(2).trimmed();
 
 		// skip comments
 		if (record.startsWith("//") || record.startsWith("#"))
+		{
+			--totalRecords;
 			continue;
-		++currentRecordNumber;
+		}		
 
 		if (!record.isEmpty())
 		{
+			#if (QT_VERSION>=QT_VERSION_CHECK(5, 14, 0))
+			QStringList list=record.split("\t", Qt::KeepEmptyParts);
+			#else
 			QStringList list=record.split("\t", QString::KeepEmptyParts);
+			#endif
 
 			id				= list.at(0).toInt();		// ID (inner identification number)
 			ra				= list.at(1).trimmed();
@@ -1188,11 +1233,14 @@ void NebulaMgr::convertDSOCatalog(const QString &in, const QString &out, bool de
 			PNG				= list.at(34).trimmed();	// PN G number
 			SNRG			= list.at(35).trimmed();	// SNR G number
 			ACO				= list.at(36).trimmed();	// ACO number
-			HCG				= list.at(37).trimmed();	// HCG number
-			Abell				= list.at(38).toInt();		// Abell number
-			ESO				= list.at(39).trimmed();	// ESO number
-			VdBH			= list.at(40).trimmed();	// VdBH number
-			DWB				= list.at(41).toInt();		// DWB number
+			HCG				= list.at(37).trimmed();	// HCG number			
+			ESO				= list.at(38).trimmed();	// ESO number
+			VdBH			= list.at(39).trimmed();	// VdBH number
+			DWB				= list.at(40).toInt();		// DWB number
+			Tr				= list.at(41).toInt();		// Tr number
+			St				= list.at(42).toInt();		// St number
+			Ru				= list.at(43).toInt();		// Ru number
+			VdBHa			= list.at(44).toInt();		// VdB-Ha number
 
 			if (decimal)
 			{
@@ -1311,10 +1359,17 @@ void NebulaMgr::convertDSOCatalog(const QString &in, const QString &out, bool de
 				{ "PSR" , Nebula::NebSNR  },
 				{ "HH"  , Nebula::NebISM  },
 				{ "V*"  , Nebula::NebStar },
+				{ "*IN"  , Nebula::NebCn },
+				{ "SN*"  , Nebula::NebStar },
 				{ "PA?" , Nebula::NebPPN  },
 				{ "BUB" , Nebula::NebISM  },
 				{ "CLG" , Nebula::NebGxCl },
-				{ "CGG" , Nebula::NebGxCl }};
+				{ "POG" , Nebula::NebPartOfGx },				
+				{ "CGG" , Nebula::NebGxCl },
+				{ "SCG" , Nebula::NebGxCl },
+				{ "REG" , Nebula::NebRegion },
+				{ "?" , Nebula::NebUnknown }
+			};
 
 			nType=oTypesMap.value(oType.toUpper(), Nebula::NebUnknown);
 			if (nType == Nebula::NebUnknown)
@@ -1325,7 +1380,7 @@ void NebulaMgr::convertDSOCatalog(const QString &in, const QString &out, bool de
 			dsoOutStream << id << raRad << decRad << bMag << vMag << static_cast<unsigned int>(nType) << mType << majorAxisSize << minorAxisSize
 				     << orientationAngle << z << zErr << plx << plxErr << dist  << distErr << NGC << IC << M << C
 				     << B << Sh2 << VdB << RCW  << LDN << LBN << Cr << Mel << PGC << UGC << Ced << Arp << VV << PK
-				     << PNG << SNRG << ACO << HCG << Abell << ESO << VdBH << DWB;
+				     << PNG << SNRG << ACO << HCG << ESO << VdBH << DWB << Tr << St << Ru << VdBHa;
 		}
 	}
 	dsoIn.close();
@@ -1361,8 +1416,10 @@ bool NebulaMgr::loadDSOCatalog(const QString &filename)
 			qDebug() << "[...]" << QString("Stellarium DSO Catalog, version %1 (%2 edition)").arg(version).arg(edition);
 			if (StelUtils::compareVersions(version, StellariumDSOCatalogVersion)!=0)
 			{
-				qDebug() << "WARNING: Mismatch the version of catalog! The expected version of catalog is" << StellariumDSOCatalogVersion;
 				++totalRecords;
+				qDebug() << "WARNING: Mismatch of DSO catalog version (" << version << ")! The expected version is" << StellariumDSOCatalogVersion;
+				qDebug() << "         See section 5.5 of the User Guide and install the right version of the catalog!";
+				QMessageBox::warning(Q_NULLPTR, q_("Attention!"), QString("%1. %2: %3 - %4: %5. %6").arg(q_("DSO catalog version mismatch"),  q_("Found"), version, q_("Expected"), StellariumDSOCatalogVersion, q_("See Logfile for instructions.")), QMessageBox::Ok);
 				break;
 			}
 		}
@@ -1426,7 +1483,7 @@ bool NebulaMgr::loadDSONames(const QString &filename)
 		static const QStringList catalogs = {
 			"IC",    "M",   "C",  "CR",  "MEL",   "B", "SH2", "VDB", "RCW",  "LDN",
 			"LBN", "NGC", "PGC", "UGC",  "CED", "ARP",  "VV",  "PK", "PNG", "SNRG",
-			"ACO", "HCG", "A66", "ESO", "VDBH", "DWB"};
+			"ACO", "HCG", "ESO", "VDBH", "DWB", "TR", "ST", "RU", "DBHA"};
 
 		switch (catalogs.indexOf(ref.toUpper()))
 		{
@@ -1495,18 +1552,27 @@ bool NebulaMgr::loadDSONames(const QString &filename)
 				break;
 			case 21:
 				e = searchHCG(cdes);
-				break;
-			case 22: // A66
-				e = searchAbell(nb);
-				break;
-			case 23:
+				break;			
+			case 22:
 				e = searchESO(cdes);
 				break;
-			case 24:
+			case 23:
 				e = searchVdBH(cdes);
 				break;
-			case 25:
+			case 24:
 				e = searchDWB(nb);
+				break;
+			case 25:
+				e = searchTr(nb);
+				break;
+			case 26:
+				e = searchSt(nb);
+				break;
+			case 27:
+				e = searchRu(nb);
+				break;
+			case 28:
+				e = searchVdBHa(nb);
 				break;
 			default:
 				e = searchDSO(nb);
@@ -1517,7 +1583,7 @@ bool NebulaMgr::loadDSONames(const QString &filename)
 		{
 			if (transRx.exactMatch(name))
 			{
-				QString propName = transRx.capturedTexts().at(1).trimmed();
+				QString propName = transRx.cap(1).trimmed();
 				QString currName = e->getEnglishName();
 				if (currName.isEmpty())
 					e->setProperName(propName);
@@ -1582,6 +1648,8 @@ bool NebulaMgr::loadDSOOutlines(const QString &filename)
 		{
 			outline.clear();
 			e = search(dso);
+			if (e.isNull()) // maybe this is inner number of DSO
+				e = searchDSO(dso.toUInt());
 
 			point.first  = RA;
 			point.second = DE;
@@ -1681,8 +1749,8 @@ void NebulaMgr::updateSkyCulture(const QString& skyCultureDir)
 			}
 			else
 			{
-				dsoId = recRx.capturedTexts().at(1).trimmed();
-				nativeName = recRx.capturedTexts().at(2).trimmed(); // Use translatable text
+				dsoId = recRx.cap(1).trimmed();
+				nativeName = recRx.cap(2).trimmed(); // Use translatable text
 				NebulaP e = search(dsoId);
 				QString currentName = e->getEnglishName();
 				if (currentName.isEmpty()) // Set native name of DSO
@@ -1773,16 +1841,17 @@ StelObjectP NebulaMgr::searchByDesignation(const QString &designation) const
 	NebulaP n;
 	QString uname = designation.toUpper();
 	// If no match found, try search by catalog reference
-	static QRegExp catNumRx("^(M|NGC|IC|C|B|VDB|RCW|LDN|LBN|CR|MEL|PGC|UGC|ARP|VV|ABELL|DWB)\\s*(\\d+)$");
+	static QRegExp catNumRx("^(M|NGC|IC|C|B|VDB|RCW|LDN|LBN|CR|MEL|PGC|UGC|ARP|VV|DWB|TR|TRUMPLER|ST|STOCK|RU|RUPRECHT|VDB-HA)\\s*(\\d+)$");
 	if (catNumRx.exactMatch(uname))
 	{
-		QString cat = catNumRx.capturedTexts().at(1);
-		unsigned int num = catNumRx.capturedTexts().at(2).toUInt();
+		QString cat = catNumRx.cap(1);		
+		unsigned int num = catNumRx.cap(2).toUInt();
 		if (cat == "M") n = searchM(num);
 		if (cat == "NGC") n = searchNGC(num);
 		if (cat == "IC") n = searchIC(num);
 		if (cat == "C") n = searchC(num);
 		if (cat == "B") n = searchB(num);
+		if (cat == "VDB-HA") n = searchVdBHa(num);
 		if (cat == "VDB") n = searchVdB(num);
 		if (cat == "RCW") n = searchRCW(num);
 		if (cat == "LDN") n = searchLDN(num);
@@ -1792,27 +1861,29 @@ StelObjectP NebulaMgr::searchByDesignation(const QString &designation) const
 		if (cat == "PGC") n = searchPGC(num);
 		if (cat == "UGC") n = searchUGC(num);
 		if (cat == "ARP") n = searchArp(num);
-		if (cat == "VV") n = searchVV(num);
-		if (cat == "ABELL") n = searchAbell(num);
+		if (cat == "VV") n = searchVV(num);		
 		if (cat == "DWB") n = searchDWB(num);
+		if (cat == "TR" || cat == "TRUMPLER") n = searchTr(num);
+		if (cat == "ST" || cat == "STOCK") n = searchSt(num);
+		if (cat == "RU" || cat == "RUPRECHT") n = searchRu(num);
 	}
 	static QRegExp dCatNumRx("^(SH)\\s*\\d-\\s*(\\d+)$");
 	if (dCatNumRx.exactMatch(uname))
 	{
-		QString dcat = dCatNumRx.capturedTexts().at(1);
-		unsigned int dnum = dCatNumRx.capturedTexts().at(2).toUInt();
+		QString dcat = dCatNumRx.cap(1);
+		unsigned int dnum = dCatNumRx.cap(2).toUInt();
 
 		if (dcat == "SH") n = searchSh2(dnum);
 	}
-	static QRegExp sCatNumRx("^(CED|PK|ACO|HCG|ESO|VDBH)\\s*(.+)$");
+	static QRegExp sCatNumRx("^(CED|PK|ACO|ABELL|HCG|ESO|VDBH)\\s*(.+)$");
 	if (sCatNumRx.exactMatch(uname))
 	{
-		QString cat = sCatNumRx.capturedTexts().at(1);
-		QString num = sCatNumRx.capturedTexts().at(2).trimmed();
+		QString cat = sCatNumRx.cap(1);
+		QString num = sCatNumRx.cap(2).trimmed();
 
 		if (cat == "CED") n = searchCed(num);
 		if (cat == "PK") n = searchPK(num);
-		if (cat == "ACO") n = searchACO(num);
+		if (cat == "ACO" || cat == "ABELL") n = searchACO(num);
 		if (cat == "HCG") n = searchHCG(num);
 		if (cat == "ESO") n = searchESO(num);
 		if (cat == "VDBH") n = searchVdBH(num);
@@ -1820,8 +1891,8 @@ StelObjectP NebulaMgr::searchByDesignation(const QString &designation) const
 	static QRegExp gCatNumRx("^(PN|SNR)\\s*G(.+)$");
 	if (gCatNumRx.exactMatch(uname))
 	{
-		QString cat = gCatNumRx.capturedTexts().at(1);
-		QString num = gCatNumRx.capturedTexts().at(2).trimmed();
+		QString cat = gCatNumRx.cap(1);
+		QString num = gCatNumRx.cap(2).trimmed();
 
 		if (cat == "PN") n = searchPNG(num);
 		if (cat == "SNR") n = searchSNRG(num);
@@ -1852,14 +1923,14 @@ QStringList NebulaMgr::listMatchingObjects(const QString& objPrefix, int maxNbIt
 			if (n->M_nb==0) continue;
 			QString constw = QString("M%1").arg(n->M_nb);
 			QString constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			if (constws.toUpper()==objw)
 			{
 				result << constws;
 				continue;	// Prevent adding both forms for name
 			}
 			constw = QString("M %1").arg(n->M_nb);
 			constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			if (constws.toUpper()==objw)
 				result << constw;
 		}
 	}
@@ -1870,16 +1941,18 @@ QStringList NebulaMgr::listMatchingObjects(const QString& objPrefix, int maxNbIt
 		for (const auto& n : dsoArray)
 		{
 			if (n->Mel_nb==0) continue;
-			QString constw = QString("MEL%1").arg(n->Mel_nb);
+			QString constw = QString("Mel%1").arg(n->Mel_nb);
 			QString constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			QString constws2 = QString("Melotte%1").arg(n->Mel_nb).mid(0, objw.size());
+			if (constws.toUpper()==objw || constws2.toUpper()==objw)
 			{
 				result << constws;
 				continue;	// Prevent adding both forms for name
 			}
-			constw = QString("MEL %1").arg(n->Mel_nb);
+			constw = QString("Mel %1").arg(n->Mel_nb);
 			constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			constws2 = QString("Melotte %1").arg(n->Mel_nb).mid(0, objw.size());
+			if (constws.toUpper()==objw || constws2.toUpper()==objw)
 				result << constw;
 		}
 	}
@@ -1892,14 +1965,14 @@ QStringList NebulaMgr::listMatchingObjects(const QString& objPrefix, int maxNbIt
 			if (n->IC_nb==0) continue;
 			QString constw = QString("IC%1").arg(n->IC_nb);
 			QString constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			if (constws.toUpper()==objw)
 			{
 				result << constws;
 				continue;	// Prevent adding both forms for name
 			}
 			constw = QString("IC %1").arg(n->IC_nb);
 			constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			if (constws.toUpper()==objw)
 				result << constw;
 		}
 	}
@@ -1910,14 +1983,14 @@ QStringList NebulaMgr::listMatchingObjects(const QString& objPrefix, int maxNbIt
 		if (n->NGC_nb==0) continue;
 		QString constw = QString("NGC%1").arg(n->NGC_nb);
 		QString constws = constw.mid(0, objw.size());
-		if (constws==objw)
+		if (constws.toUpper()==objw)
 		{
 			result << constws;
 			continue;
 		}
 		constw = QString("NGC %1").arg(n->NGC_nb);
 		constws = constw.mid(0, objw.size());
-		if (constws==objw)
+		if (constws.toUpper()==objw)
 			result << constw;
 	}
 
@@ -1929,14 +2002,14 @@ QStringList NebulaMgr::listMatchingObjects(const QString& objPrefix, int maxNbIt
 			if (n->PGC_nb==0) continue;
 			QString constw = QString("PGC%1").arg(n->PGC_nb);
 			QString constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			if (constws.toUpper()==objw)
 			{
 				result << constws;	// Prevent adding both forms for name
 				continue;
 			}
 			constw = QString("PGC %1").arg(n->PGC_nb);
 			constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			if (constws.toUpper()==objw)
 				result << constw;
 		}
 	}
@@ -1949,14 +2022,14 @@ QStringList NebulaMgr::listMatchingObjects(const QString& objPrefix, int maxNbIt
 			if (n->UGC_nb==0) continue;
 			QString constw = QString("UGC%1").arg(n->UGC_nb);
 			QString constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			if (constws.toUpper()==objw)
 			{
 				result << constws;
 				continue;	// Prevent adding both forms for name
 			}
 			constw = QString("UGC %1").arg(n->UGC_nb);
 			constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			if (constws.toUpper()==objw)
 				result << constw;
 		}
 	}
@@ -1969,34 +2042,36 @@ QStringList NebulaMgr::listMatchingObjects(const QString& objPrefix, int maxNbIt
 			if (n->C_nb==0) continue;
 			QString constw = QString("C%1").arg(n->C_nb);
 			QString constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			if (constws.toUpper()==objw)
 			{
 				result << constws;
 				continue;	// Prevent adding both forms for name
 			}
 			constw = QString("C %1").arg(n->C_nb);
 			constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			if (constws.toUpper()==objw)
 				result << constw;
 		}
 	}
 
 	// Search by Collinder objects number (possible formats are "Cr31" or "Cr 31")
-	if (objw.size()>=1 && objw.left(2)=="CR")
+	if (objw.size()>=1 && (objw.left(2)=="CR" || objw.left(9)=="COLLINDER"))
 	{
 		for (const auto& n : dsoArray)
 		{
 			if (n->Cr_nb==0) continue;
-			QString constw = QString("CR%1").arg(n->Cr_nb);
+			QString constw = QString("Cr%1").arg(n->Cr_nb);
 			QString constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			QString constws2 = QString("Collinder%1").arg(n->Cr_nb).mid(0, objw.size());
+			if (constws.toUpper()==objw || constws2.toUpper()==objw)
 			{
 				result << constws;
 				continue;	// Prevent adding both forms for name
 			}
-			constw = QString("CR %1").arg(n->Cr_nb);
+			constw = QString("Cr %1").arg(n->Cr_nb);
 			constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			constws2 = QString("Collinder %1").arg(n->Cr_nb).mid(0, objw.size());
+			if (constws.toUpper()==objw || constws2.toUpper()==objw)
 				result << constw;
 		}
 	}
@@ -2009,14 +2084,14 @@ QStringList NebulaMgr::listMatchingObjects(const QString& objPrefix, int maxNbIt
 			if (n->Ced_nb.isEmpty()) continue;
 			QString constw = QString("Ced%1").arg(n->Ced_nb.trimmed());
 			QString constws = constw.mid(0, objw.size());
-			if (constws.toUpper()==objw.toUpper())
+			if (constws.toUpper()==objw)
 			{
 				result << constws;
 				continue;	// Prevent adding both forms for name
 			}
 			constw = QString("Ced %1").arg(n->Ced_nb.trimmed());
 			constws = constw.mid(0, objw.size());
-			if (constws.toUpper()==objw.toUpper())
+			if (constws.toUpper()==objw)
 				result << constw;
 		}
 	}
@@ -2029,14 +2104,14 @@ QStringList NebulaMgr::listMatchingObjects(const QString& objPrefix, int maxNbIt
 			if (n->B_nb==0) continue;
 			QString constw = QString("B%1").arg(n->B_nb);
 			QString constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			if (constws.toUpper()==objw)
 			{
 				result << constws;
 				continue;	// Prevent adding both forms for name
 			}
 			constw = QString("B %1").arg(n->B_nb);
 			constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			if (constws.toUpper()==objw)
 				result << constw;
 		}
 	}
@@ -2049,34 +2124,34 @@ QStringList NebulaMgr::listMatchingObjects(const QString& objPrefix, int maxNbIt
 			if (n->Sh2_nb==0) continue;
 			QString constw = QString("SH2-%1").arg(n->Sh2_nb);
 			QString constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			if (constws.toUpper()==objw)
 			{
 				result << constws;
 				continue;	// Prevent adding both forms for name
 			}
 			constw = QString("SH 2-%1").arg(n->Sh2_nb);
 			constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			if (constws.toUpper()==objw)
 				result << constw;
 		}
 	}
 
-	// Search by Van den Bergh objects number (possible formats are "VdB31" or "VdB 31")
-	if (objw.size()>=1 && objw.left(3)=="VDB")
+	// Search by van den Bergh objects number (possible formats are "vdB31" or "vdB 31")
+	if (objw.size()>=1 && objw.left(3)=="VDB" && objw.left(6)!="VDB-HA" && objw.left(4)!="VDBH")
 	{
 		for (const auto& n : dsoArray)
 		{
 			if (n->VdB_nb==0) continue;
-			QString constw = QString("VDB%1").arg(n->VdB_nb);
+			QString constw = QString("vdB%1").arg(n->VdB_nb);
 			QString constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			if (constws.toUpper()==objw)
 			{
 				result << constws;
 				continue;	// Prevent adding both forms for name
 			}
-			constw = QString("VDB %1").arg(n->VdB_nb);
+			constw = QString("vdB %1").arg(n->VdB_nb);
 			constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			if (constws.toUpper()==objw)
 				result << constw;
 		}
 	}
@@ -2089,14 +2164,14 @@ QStringList NebulaMgr::listMatchingObjects(const QString& objPrefix, int maxNbIt
 			if (n->RCW_nb==0) continue;
 			QString constw = QString("RCW%1").arg(n->RCW_nb);
 			QString constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			if (constws.toUpper()==objw)
 			{
 				result << constws;
 				continue;	// Prevent adding both forms for name
 			}
 			constw = QString("RCW %1").arg(n->RCW_nb);
 			constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			if (constws.toUpper()==objw)
 				result << constw;
 		}
 	}
@@ -2109,14 +2184,14 @@ QStringList NebulaMgr::listMatchingObjects(const QString& objPrefix, int maxNbIt
 			if (n->LDN_nb==0) continue;
 			QString constw = QString("LDN%1").arg(n->LDN_nb);
 			QString constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			if (constws.toUpper()==objw)
 			{
 				result << constws;
 				continue;	// Prevent adding both forms for name
 			}
 			constw = QString("LDN %1").arg(n->LDN_nb);
 			constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			if (constws.toUpper()==objw)
 				result << constw;
 		}
 	}
@@ -2129,14 +2204,14 @@ QStringList NebulaMgr::listMatchingObjects(const QString& objPrefix, int maxNbIt
 			if (n->LBN_nb==0) continue;
 			QString constw = QString("LBN%1").arg(n->LBN_nb);
 			QString constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			if (constws.toUpper()==objw)
 			{
 				result << constws;
 				continue;	// Prevent adding both forms for name
 			}
 			constw = QString("LBN %1").arg(n->LBN_nb);
 			constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			if (constws.toUpper()==objw)
 				result << constw;
 		}
 	}
@@ -2147,16 +2222,16 @@ QStringList NebulaMgr::listMatchingObjects(const QString& objPrefix, int maxNbIt
 		for (const auto& n : dsoArray)
 		{
 			if (n->Arp_nb==0) continue;
-			QString constw = QString("ARP%1").arg(n->Arp_nb);
+			QString constw = QString("Arp%1").arg(n->Arp_nb);
 			QString constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			if (constws.toUpper()==objw)
 			{
 				result << constws;
 				continue;	// Prevent adding both forms for name
 			}
-			constw = QString("ARP %1").arg(n->Arp_nb);
+			constw = QString("Arp %1").arg(n->Arp_nb);
 			constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			if (constws.toUpper()==objw)
 				result << constw;
 		}
 	}
@@ -2169,14 +2244,14 @@ QStringList NebulaMgr::listMatchingObjects(const QString& objPrefix, int maxNbIt
 			if (n->VV_nb==0) continue;
 			QString constw = QString("VV%1").arg(n->VV_nb);
 			QString constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			if (constws.toUpper()==objw)
 			{
 				result << constws;
 				continue;	// Prevent adding both forms for name
 			}
 			constw = QString("VV %1").arg(n->VV_nb);
 			constws = constw.mid(0, objw.size());
-			if (constws==objw)
+			if (constws.toUpper()==objw)
 				result << constw;
 		}
 	}
@@ -2189,14 +2264,14 @@ QStringList NebulaMgr::listMatchingObjects(const QString& objPrefix, int maxNbIt
 			if (n->PK_nb.isEmpty()) continue;
 			QString constw = QString("PK%1").arg(n->PK_nb.trimmed());
 			QString constws = constw.mid(0, objw.size());
-			if (constws.toUpper()==objw.toUpper())
+			if (constws.toUpper()==objw)
 			{
 				result << constws;
 				continue;	// Prevent adding both forms for name
 			}
 			constw = QString("PK %1").arg(n->PK_nb.trimmed());
 			constws = constw.mid(0, objw.size());
-			if (constws.toUpper()==objw.toUpper())
+			if (constws.toUpper()==objw)
 				result << constw;
 		}
 	}
@@ -2209,14 +2284,14 @@ QStringList NebulaMgr::listMatchingObjects(const QString& objPrefix, int maxNbIt
 			if (n->PNG_nb.isEmpty()) continue;
 			QString constw = QString("PNG%1").arg(n->PNG_nb.trimmed());
 			QString constws = constw.mid(0, objw.size());
-			if (constws.toUpper()==objw.toUpper())
+			if (constws.toUpper()==objw)
 			{
 				result << constws;
 				continue;	// Prevent adding both forms for name
 			}
 			constw = QString("PN G%1").arg(n->PNG_nb.trimmed());
 			constws = constw.mid(0, objw.size());
-			if (constws.toUpper()==objw.toUpper())
+			if (constws.toUpper()==objw)
 				result << constw;
 		}
 	}
@@ -2229,54 +2304,36 @@ QStringList NebulaMgr::listMatchingObjects(const QString& objPrefix, int maxNbIt
 			if (n->SNRG_nb.isEmpty()) continue;
 			QString constw = QString("SNRG%1").arg(n->SNRG_nb.trimmed());
 			QString constws = constw.mid(0, objw.size());
-			if (constws.toUpper()==objw.toUpper())
+			if (constws.toUpper()==objw)
 			{
 				result << constws;
 				continue;	// Prevent adding both forms for name
 			}
 			constw = QString("SNR G%1").arg(n->SNRG_nb.trimmed());
 			constws = constw.mid(0, objw.size());
-			if (constws.toUpper()==objw.toUpper())
+			if (constws.toUpper()==objw)
 				result << constw;
 		}
 	}
 
-	// Search by ACO objects number
-	if (objw.size()>=1 && objw.left(3)=="ACO")
+	// Search by ACO (Abell) objects number
+	if (objw.size()>=1 && (objw.left(5)=="ABELL" || objw.left(3)=="ACO"))
 	{
 		for (const auto& n : dsoArray)
 		{
 			if (n->ACO_nb.isEmpty()) continue;
-			QString constw = QString("ACO%1").arg(n->ACO_nb.trimmed());
+			QString constw = QString("Abell%1").arg(n->ACO_nb.trimmed());
 			QString constws = constw.mid(0, objw.size());
-			if (constws.toUpper()==objw.toUpper())
+			QString constws2 = QString("ACO%1").arg(n->ACO_nb.trimmed()).mid(0, objw.size());
+			if (constws.toUpper()==objw || constws2.toUpper()==objw)
 			{
 				result << constws;
 				continue;	// Prevent adding both forms for name
 			}
-			constw = QString("ACO %1").arg(n->ACO_nb.trimmed());
+			constw = QString("Abell %1").arg(n->ACO_nb.trimmed());
 			constws = constw.mid(0, objw.size());
-			if (constws.toUpper()==objw.toUpper())
-				result << constw;
-		}
-	}
-
-	// Search by Abell objects number
-	if (objw.size()>=1 && objw.left(5)=="ABELL")
-	{
-		for (const auto& n : dsoArray)
-		{
-			if (n->Abell_nb==0) continue;
-			QString constw = QString("Abell%1").arg(n->Abell_nb);
-			QString constws = constw.mid(0, objw.size());
-			if (constws.toUpper()==objw.toUpper())
-			{
-				result << constws;
-				continue;	// Prevent adding both forms for name
-			}
-			constw = QString("Abell %1").arg(n->Abell_nb);
-			constws = constw.mid(0, objw.size());
-			if (constws.toUpper()==objw.toUpper())
+			constws2 = QString("ACO %1").arg(n->ACO_nb.trimmed()).mid(0, objw.size());
+			if (constws.toUpper()==objw || constws2.toUpper()==objw)
 				result << constw;
 		}
 	}
@@ -2289,14 +2346,14 @@ QStringList NebulaMgr::listMatchingObjects(const QString& objPrefix, int maxNbIt
 			if (n->HCG_nb.isEmpty()) continue;
 			QString constw = QString("HCG%1").arg(n->HCG_nb.trimmed());
 			QString constws = constw.mid(0, objw.size());
-			if (constws.toUpper()==objw.toUpper())
+			if (constws.toUpper()==objw)
 			{
 				result << constws;
 				continue;	// Prevent adding both forms for name
 			}
 			constw = QString("HCG %1").arg(n->HCG_nb.trimmed());
 			constws = constw.mid(0, objw.size());
-			if (constws.toUpper()==objw.toUpper())
+			if (constws.toUpper()==objw)
 				result << constw;
 		}
 	}
@@ -2309,14 +2366,14 @@ QStringList NebulaMgr::listMatchingObjects(const QString& objPrefix, int maxNbIt
 			if (n->ESO_nb.isEmpty()) continue;
 			QString constw = QString("ESO%1").arg(n->ESO_nb.trimmed());
 			QString constws = constw.mid(0, objw.size());
-			if (constws.toUpper()==objw.toUpper())
+			if (constws.toUpper()==objw)
 			{
 				result << constws;
 				continue;	// Prevent adding both forms for name
 			}
 			constw = QString("ESO %1").arg(n->ESO_nb.trimmed());
 			constws = constw.mid(0, objw.size());
-			if (constws.toUpper()==objw.toUpper())
+			if (constws.toUpper()==objw)
 				result << constw;
 		}
 	}
@@ -2327,16 +2384,16 @@ QStringList NebulaMgr::listMatchingObjects(const QString& objPrefix, int maxNbIt
 		for (const auto& n : dsoArray)
 		{
 			if (n->VdBH_nb.isEmpty()) continue;
-			QString constw = QString("VdBH%1").arg(n->VdBH_nb.trimmed());
+			QString constw = QString("vdBH%1").arg(n->VdBH_nb.trimmed());
 			QString constws = constw.mid(0, objw.size());
-			if (constws.toUpper()==objw.toUpper())
+			if (constws.toUpper()==objw)
 			{
 				result << constws;
 				continue;	// Prevent adding both forms for name
 			}
-			constw = QString("VdBH %1").arg(n->VdBH_nb.trimmed());
+			constw = QString("vdBH %1").arg(n->VdBH_nb.trimmed());
 			constws = constw.mid(0, objw.size());
-			if (constws.toUpper()==objw.toUpper())
+			if (constws.toUpper()==objw)
 				result << constw;
 		}
 	}
@@ -2349,14 +2406,100 @@ QStringList NebulaMgr::listMatchingObjects(const QString& objPrefix, int maxNbIt
 			if (n->DWB_nb==0) continue;
 			QString constw = QString("DWB%1").arg(n->DWB_nb);
 			QString constws = constw.mid(0, objw.size());
-			if (constws.toUpper()==objw.toUpper())
+			if (constws.toUpper()==objw)
 			{
 				result << constws;
 				continue;	// Prevent adding both forms for name
 			}
 			constw = QString("DWB %1").arg(n->DWB_nb);
 			constws = constw.mid(0, objw.size());
-			if (constws.toUpper()==objw.toUpper())
+			if (constws.toUpper()==objw)
+				result << constw;
+		}
+	}
+
+	// Search by Tr (Trumpler) objects number
+	if (objw.size()>=1 && (objw.left(8)=="TRUMPLER" || objw.left(2)=="TR"))
+	{
+		for (const auto& n : dsoArray)
+		{
+			if (n->Tr_nb==0) continue;
+			QString constw = QString("Tr%1").arg(n->Tr_nb);
+			QString constws = constw.mid(0, objw.size());
+			QString constws2 = QString("Trumpler%1").arg(n->Tr_nb).mid(0, objw.size());
+			if (constws.toUpper()==objw || constws2.toUpper()==objw)
+			{
+				result << constws;
+				continue;	// Prevent adding both forms for name
+			}
+			constw = QString("Tr %1").arg(n->Tr_nb);
+			constws = constw.mid(0, objw.size());
+			constws2 = QString("Trumpler %1").arg(n->Tr_nb).mid(0, objw.size());
+			if (constws.toUpper()==objw || constws2.toUpper()==objw)
+				result << constw;
+		}
+	}
+
+	// Search by St (Stock) objects number
+	if (objw.size()>=1 && (objw.left(5)=="STOCK" || objw.left(2)=="ST"))
+	{
+		for (const auto& n : dsoArray)
+		{
+			if (n->St_nb==0) continue;
+			QString constw = QString("St%1").arg(n->St_nb);
+			QString constws = constw.mid(0, objw.size());
+			QString constws2 = QString("Stock%1").arg(n->St_nb).mid(0, objw.size());
+			if (constws.toUpper()==objw || constws2.toUpper()==objw)
+			{
+				result << constws;
+				continue;	// Prevent adding both forms for name
+			}
+			constw = QString("St %1").arg(n->St_nb);
+			constws = constw.mid(0, objw.size());
+			constws2 = QString("Stock %1").arg(n->St_nb).mid(0, objw.size());
+			if (constws.toUpper()==objw || constws2.toUpper()==objw)
+				result << constw;
+		}
+	}
+
+	// Search by Ru (Ruprecht) objects number
+	if (objw.size()>=1 && (objw.left(8)=="RUPRECHT" || objw.left(2)=="RU"))
+	{
+		for (const auto& n : dsoArray)
+		{
+			if (n->Ru_nb==0) continue;
+			QString constw = QString("Ru%1").arg(n->Ru_nb);
+			QString constws = constw.mid(0, objw.size());
+			QString constws2 = QString("Ruprecht%1").arg(n->Ru_nb).mid(0, objw.size());
+			if (constws.toUpper()==objw || constws2.toUpper()==objw)
+			{
+				result << constws;
+				continue;	// Prevent adding both forms for name
+			}
+			constw = QString("Ru %1").arg(n->Ru_nb);
+			constws = constw.mid(0, objw.size());
+			constws2 = QString("Ruprecht %1").arg(n->Ru_nb).mid(0, objw.size());
+			if (constws.toUpper()==objw || constws2.toUpper()==objw)
+				result << constw;
+		}
+	}
+
+	// Search by van den Bergh-Hagen Catalogue objects number
+	if (objw.size()>=1 && objw.left(6)=="VDB-HA")
+	{
+		for (const auto& n : dsoArray)
+		{
+			if (n->VdBHa_nb==0) continue;
+			QString constw = QString("vdB-Ha%1").arg(n->VdBHa_nb);
+			QString constws = constw.mid(0, objw.size());
+			if (constws.toUpper()==objw)
+			{
+				result << constws;
+				continue;	// Prevent adding both forms for name
+			}
+			constw = QString("vdB-Ha %1").arg(n->VdBHa_nb);
+			constws = constw.mid(0, objw.size());
+			if (constws.toUpper()==objw)
 				result << constw;
 		}
 	}
@@ -2455,9 +2598,9 @@ QStringList NebulaMgr::listAllObjectsByType(const QString &objType, bool inEngli
 			for (const auto& n : getDeepSkyObjectsByType(objType))
 				result << QString("SH 2-%1").arg(n->Sh2_nb);
 			break;
-		case 104: // Van den Bergh Catalogue
+		case 104: // van den Bergh Catalogue
 			for (const auto& n : getDeepSkyObjectsByType(objType))
-				result << QString("VdB %1").arg(n->VdB_nb);
+				result << QString("vdB %1").arg(n->VdB_nb);
 			break;
 		case 105: // RCW Catalogue
 			for (const auto& n : getDeepSkyObjectsByType(objType))
@@ -2511,29 +2654,41 @@ QStringList NebulaMgr::listAllObjectsByType(const QString &objType, bool inEngli
 			for (const auto& n : getDeepSkyObjectsByType(objType))
 				result << QString("SNR G%1").arg(n->SNRG_nb);
 			break;
-		case 120: // A Catalog of Rich Clusters of Galaxies by Abell et. al. (ACO)
+		case 120: // A Catalog of Rich Clusters of Galaxies by Abell et. al. (Abell (ACO))
 			for (const auto& n : getDeepSkyObjectsByType(objType))
-				result << QString("ACO %1").arg(n->ACO_nb);
+				result << QString("Abell %1").arg(n->ACO_nb);
 			break;
 		case 121: // Hickson Compact Group by Hickson et. al. (HCG)
 			for (const auto& n : getDeepSkyObjectsByType(objType))
 				result << QString("HCG %1").arg(n->HCG_nb);
 			break;
-		case 122: // Abell Catalog of Planetary Nebulae (Abell)
-			for (const auto& n : getDeepSkyObjectsByType(objType))
-				result << QString("Abell %1").arg(n->Abell_nb);
-			break;
-		case 123: // ESO/Uppsala Survey of the ESO(B) Atlas (ESO)
+		case 122: // ESO/Uppsala Survey of the ESO(B) Atlas (ESO)
 			for (const auto& n : getDeepSkyObjectsByType(objType))
 				result << QString("ESO %1").arg(n->ESO_nb);
 			break;
-		case 124: // Catalogue of southern stars embedded in nebulosity (VdBH)
+		case 123: // Catalogue of southern stars embedded in nebulosity (vdBH)
 			for (const auto& n : getDeepSkyObjectsByType(objType))
-				result << QString("VdBH %1").arg(n->VdBH_nb);
+				result << QString("vdBH %1").arg(n->VdBH_nb);
 			break;
-		case 125: // Catalogue and distances of optically visible H II regions (DWB)
+		case 124: // Catalogue and distances of optically visible H II regions (DWB)
 			for (const auto& n : getDeepSkyObjectsByType(objType))
 				result << QString("DWB %1").arg(n->DWB_nb);
+			break;
+		case 125: // Trumpler Catalogue (Tr)
+			for (const auto& n : getDeepSkyObjectsByType(objType))
+				result << QString("Tr %1").arg(n->Tr_nb);
+			break;
+		case 126: // Stock Catalogue (St)
+			for (const auto& n : getDeepSkyObjectsByType(objType))
+				result << QString("St %1").arg(n->St_nb);
+			break;
+		case 127: // Ruprecht Catalogue (Ru)
+			for (const auto& n : getDeepSkyObjectsByType(objType))
+				result << QString("Ru %1").arg(n->Ru_nb);
+			break;
+		case 128: // van den Bergh-Hagen Catalogue (VdB-Ha)
+			for (const auto& n : getDeepSkyObjectsByType(objType))
+				result << QString("vdB-Ha %1").arg(n->VdBHa_nb);
 			break;
 		case 150: // Dwarf galaxies [see NebulaList.hpp]
 		{
@@ -2586,7 +2741,7 @@ QStringList NebulaMgr::listAllObjectsByType(const QString &objType, bool inEngli
 					else if (n->Sh2_nb>0)
 						result << QString("SH 2-%1").arg(n->Sh2_nb);
 					else if (n->VdB_nb>0)
-						result << QString("VdB %1").arg(n->VdB_nb);
+						result << QString("vdB %1").arg(n->VdB_nb);
 					else if (n->RCW_nb>0)
 						result << QString("RCW %1").arg(n->RCW_nb);
 					else if (n->LBN_nb>0)
@@ -2614,17 +2769,23 @@ QStringList NebulaMgr::listAllObjectsByType(const QString &objType, bool inEngli
 					else if (n->UGC_nb > 0)
 						result << QString("UGC %1").arg(n->UGC_nb);
 					else if (!n->ACO_nb.isEmpty())
-						result << QString("ACO %1").arg(n->ACO_nb);
+						result << QString("Abell %1").arg(n->ACO_nb);
 					else if (!n->HCG_nb.isEmpty())
-						result << QString("HCG %1").arg(n->HCG_nb);
-					else if (n->Abell_nb>0)
-						result << QString("Abell %1").arg(n->Abell_nb);
+						result << QString("HCG %1").arg(n->HCG_nb);					
 					else if (!n->ESO_nb.isEmpty())
 						result << QString("ESO %1").arg(n->ESO_nb);
 					else if (!n->VdBH_nb.isEmpty())
-						result << QString("VdBH %1").arg(n->VdBH_nb);
+						result << QString("vdBH %1").arg(n->VdBH_nb);
 					else if (n->DWB_nb>0)
 						result << QString("DWB %1").arg(n->DWB_nb);
+					else if (n->Tr_nb>0)
+						result << QString("Tr %1").arg(n->Tr_nb);
+					else if (n->St_nb>0)
+						result << QString("St %1").arg(n->St_nb);
+					else if (n->Ru_nb>0)
+						result << QString("Ru %1").arg(n->Ru_nb);
+					else if (n->VdBHa_nb>0)
+						result << QString("vdB-Ha %1").arg(n->VdBHa_nb);
 				}
 			}
 			break;
@@ -2669,7 +2830,7 @@ QList<NebulaP> NebulaMgr::getDeepSkyObjectsByType(const QString &objType) const
 					dso.append(n);
 			}
 			break;
-		case 104: // Van den Bergh Catalogue
+		case 104: // van den Bergh Catalogue
 			for (const auto& n : dsoArray)
 			{
 				if (n->VdB_nb>0)
@@ -2795,31 +2956,52 @@ QList<NebulaP> NebulaMgr::getDeepSkyObjectsByType(const QString &objType) const
 					dso.append(n);
 			}
 			break;
-		case 122: // Abell Catalog of Planetary Nebulae (Abell)
-			for (const auto& n : dsoArray)
-			{
-				if (n->Abell_nb>0)
-					dso.append(n);
-			}
-			break;
-		case 123: // ESO/Uppsala Survey of the ESO(B) Atlas (ESO)
+		case 122: // ESO/Uppsala Survey of the ESO(B) Atlas (ESO)
 			for (const auto& n : dsoArray)
 			{
 				if (!n->ESO_nb.isEmpty())
 					dso.append(n);
 			}
 			break;
-		case 124: // Catalogue of southern stars embedded in nebulosity (VdBH)
+		case 123: // Catalogue of southern stars embedded in nebulosity (VdBH)
 			for (const auto& n : dsoArray)
 			{
 				if (!n->VdBH_nb.isEmpty())
 					dso.append(n);
 			}
 			break;
-		case 125: // Catalogue and distances of optically visible H II regions (DWB)
+		case 124: // Catalogue and distances of optically visible H II regions (DWB)
 			for (const auto& n : dsoArray)
 			{
 				if (n->DWB_nb > 0)
+					dso.append(n);
+			}
+			break;
+		case 125: // Trumpler Catalogue (Tr)
+			for (const auto& n : dsoArray)
+			{
+				if (n->Tr_nb > 0)
+					dso.append(n);
+			}
+			break;
+		case 126: // Stock Catalogue (St)
+			for (const auto& n : dsoArray)
+			{
+				if (n->St_nb > 0)
+					dso.append(n);
+			}
+			break;
+		case 127: // Ruprecht Catalogue (Ru)
+			for (const auto& n : dsoArray)
+			{
+				if (n->Ru_nb > 0)
+					dso.append(n);
+			}
+			break;
+		case 128: // van den Bergh-Hagen Catalogue (VdB-Ha)
+			for (const auto& n : dsoArray)
+			{
+				if (n->VdBHa_nb > 0)
 					dso.append(n);
 			}
 			break;

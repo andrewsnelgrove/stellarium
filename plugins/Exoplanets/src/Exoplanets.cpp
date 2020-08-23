@@ -209,6 +209,7 @@ void Exoplanets::init()
 	updateTimer->start();
 
 	connect(this, SIGNAL(jsonUpdateComplete(void)), this, SLOT(reloadCatalog()));
+	connect(StelApp::getInstance().getCore(), SIGNAL(configurationDataSaved()), this, SLOT(saveSettings()));
 
 	GETSTELMODULE(StelObjectMgr)->registerStelObjectMgr(this);
 }
@@ -702,8 +703,8 @@ void Exoplanets::loadConfiguration(void)
 	enableAtStartup = conf->value("enable_at_startup", false).toBool();
 	flagShowExoplanetsButton = conf->value("flag_show_exoplanets_button", true).toBool();
 	setFlagShowExoplanetsDesignations(conf->value("flag_show_designations", true).toBool());
-	setMarkerColor(StelUtils::strToVec3f(conf->value("exoplanet_marker_color", "0.4,0.9,0.5").toString()));
-	setHabitableColor(StelUtils::strToVec3f(conf->value("habitable_exoplanet_marker_color", "1.0,0.5,0.0").toString()));
+	setMarkerColor(Vec3f(conf->value("exoplanet_marker_color", "0.4,0.9,0.5").toString()));
+	setHabitableColor(Vec3f(conf->value("habitable_exoplanet_marker_color", "1.0,0.5,0.0").toString()));
 	setCurrentTemperatureScaleKey(conf->value("temperature_scale", "Celsius").toString());
 
 	conf->endGroup();
@@ -722,8 +723,8 @@ void Exoplanets::saveConfiguration(void)
 	conf->setValue("enable_at_startup", enableAtStartup);
 	conf->setValue("flag_show_exoplanets_button", flagShowExoplanetsButton);
 	conf->setValue("flag_show_designations", getFlagShowExoplanetsDesignations());
-	conf->setValue("habitable_exoplanet_marker_color", StelUtils::vec3fToStr(getHabitableColor()));
-	conf->setValue("exoplanet_marker_color", StelUtils::vec3fToStr(getMarkerColor()));
+	conf->setValue("habitable_exoplanet_marker_color", getHabitableColor().toStr());
+	conf->setValue("exoplanet_marker_color", getMarkerColor().toStr());
 	conf->setValue("temperature_scale", getCurrentTemperatureScaleKey());
 
 	conf->endGroup();
@@ -782,7 +783,7 @@ void Exoplanets::setFlagShowExoplanetsButton(bool b)
 				toolbarButton = new StelButton(Q_NULLPTR,
 							       QPixmap(":/Exoplanets/btExoplanets-on.png"),
 							       QPixmap(":/Exoplanets/btExoplanets-off.png"),
-							       QPixmap(":/graphicGui/glow32x32.png"),
+							       QPixmap(":/graphicGui/miscGlow32x32.png"),
 							       "actionShow_Exoplanets");
 			}
 			gui->getButtonBar()->addButton(toolbarButton, "065-pluginsGroup");
@@ -861,6 +862,7 @@ void Exoplanets::setFlagShowExoplanets(bool b)
 	{
 		flagShowExoplanets=b;
 		emit flagExoplanetsVisibilityChanged(b);
+		emit StelApp::getInstance().getCore()->updateSearchLists();
 	}
 }
 

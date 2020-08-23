@@ -197,6 +197,8 @@ LandscapeMgr::LandscapeMgr()
 	, flagLandscapeSetsLocation(false)
 	, flagLandscapeAutoSelection(false)
 	, flagLightPollutionFromDatabase(false)
+	, flagPolyLineDisplayedOnly(false)
+	, polyLineThickness(1)
 	, flagLandscapeUseMinimalBrightness(false)
 	, defaultMinimalBrightness(0.01)
 	, flagLandscapeSetsMinimalBrightness(false)
@@ -243,7 +245,7 @@ double LandscapeMgr::getCallOrder(StelModuleActionName actionName) const
 	// GZ The next 2 lines are only required to test landscape transparency. They should be commented away for releases.
 	if (actionName==StelModule::ActionHandleMouseClicks)
 		return StelApp::getInstance().getModuleMgr().getModule("StelMovementMgr")->getCallOrder(actionName)-1;
-	return 0;
+	return 0.;
 }
 
 void LandscapeMgr::update(double deltaTime)
@@ -417,8 +419,8 @@ void LandscapeMgr::draw(StelCore* core)
 
 	// Draw the landscape
 	if (oldLandscape)
-		oldLandscape->draw(core);
-	landscape->draw(core);
+		oldLandscape->draw(core, flagPolyLineDisplayedOnly);
+	landscape->draw(core, flagPolyLineDisplayedOnly);
 
 	// Draw the cardinal points
 	cardinalsPoints->draw(core, static_cast<double>(StelApp::getInstance().getCore()->getCurrentLocation().latitude));
@@ -432,6 +434,20 @@ void LandscapeMgr::draw(StelCore* core)
 	device.setSize(QSize(prj->getViewportWidth(), prj->getViewportHeight()));
 	QPainter painter(&device);
 }
+
+// Some element in drawing order behind LandscapeMgr can call this at the end of its own draw() to overdraw with the polygon line and gazetteer.
+void LandscapeMgr::drawPolylineOnly(StelCore* core)
+{
+	// Draw the landscape
+	if (oldLandscape && oldLandscape->hasLandscapePolygon())
+		oldLandscape->draw(core, true);
+	if (landscape->hasLandscapePolygon())
+		landscape->draw(core, true);
+
+	// Draw the cardinal points
+	cardinalsPoints->draw(core, static_cast<double>(StelApp::getInstance().getCore()->getCurrentLocation().latitude));
+}
+
 
 void LandscapeMgr::init()
 {
@@ -464,7 +480,7 @@ void LandscapeMgr::init()
 
 	// Load colors from config file
 	QString defaultColor = conf->value("color/default_color").toString();
-	setColorCardinalPoints(StelUtils::strToVec3f(conf->value("color/cardinal_color", defaultColor).toString()));
+	setColorCardinalPoints(Vec3f(conf->value("color/cardinal_color", defaultColor).toString()));
 
 	StelApp *app = &StelApp::getInstance();
 	currentPlanetName = app->getCore()->getCurrentLocation().planetName;
@@ -615,7 +631,7 @@ bool LandscapeMgr::setCurrentLandscapeName(const QString& name, const double cha
 	}
 	else
 	{
-		qWarning() << "Can't find a landscape with name=" << name << endl;
+		qWarning() << "Can't find a landscape with name=" << name << StelUtils::getEndLineChar();
 		return false;
 	}
 }
@@ -768,6 +784,7 @@ void LandscapeMgr::onTargetLocationChanged(const StelLocation &loc)
 				setFlagAtmosphere(false);
 				setFlagFog(false);
 				setFlagLandscape(false);
+				setFlagCardinalsPoints(false);
 			}
 		}
 		else
@@ -780,6 +797,7 @@ void LandscapeMgr::onTargetLocationChanged(const StelLocation &loc)
 				setFlagAtmosphere(pl->hasAtmosphere() && conf->value("landscape/flag_atmosphere", true).toBool());
 				setFlagFog(pl->hasAtmosphere() && conf->value("landscape/flag_fog", true).toBool());
 				setFlagLandscape(true);
+				setFlagCardinalsPoints(conf->value("viewing/flag_cardinal_points",true).toBool());
 			}
 		}
 	}
@@ -1296,7 +1314,7 @@ bool LandscapeMgr::removeLandscape(const QString landscapeID)
 		qWarning() << "LandscapeMgr: Error! Landscape" << landscapeID
 				   << "could not be removed. "
 				   << "Some files were deleted, but not all."
-				   << endl
+				   << StelUtils::getEndLineChar()
 				   << "LandscapeMgr: You can delete manually" << QDir::cleanPath(landscapeDir.filePath(landscapeID));
 		emit errorRemoveManually(QDir::cleanPath(landscapeDir.filePath(landscapeID)));
 		return false;

@@ -1547,6 +1547,20 @@ already be saturated.
 
 The possibilities seem limited only by your time and skills!
 
+\section{Troubleshooting}
+\label{sec:landscapes:Troubleshooting}
+
+If something does not work as described and Stellarium does not show
+your landscape as expected but maybe just a bright magenta-colored
+box, don't panic.  Double and triple-check the entries in
+\file{landscape.ini}. \newFeature{v0.20.2} Make sure the texture is in
+PNG format and the file name is correct. Check the logfile for error
+messages. If the image is too large, it will be re-scaled on loading,
+but it is more efficient to keep images as small as required. Only few
+systems can use textures larger than $16384\times16384$~Pixels. If you
+need high resolution, use the \texttt{old\_style} type (see section
+\ref{sec:landscapes:oldStyle}).
+
 \section{Other recommended software}
 \label{sec:landscapes:otherSoftware}
 

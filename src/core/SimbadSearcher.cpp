@@ -105,61 +105,61 @@ void SimbadLookupReply::httpQueryFinished()
 	}
 	if (found)
 	{
-		if (cooAnswer){
-
-			resultIDs.clear();
-			while (!reply->atEnd())
-				resultIDs.append(reply->readLine());
-			//qDebug() << "Cleaned result: " << resultIDs;
-		}
-		currentStatus = SimbadCoordinateLookupFinished;
-	}
-	else
-	{
-		line = reply->readLine();
-		line.chop(1); // Remove a line break at the end
-		while (!line.isEmpty())
+		if (cooAnswer)
 		{
-			if (line=="No Coord.")
+			cooResult.clear();
+			while (!reply->atEnd())
+				cooResult.append(reply->readLine());
+			//qDebug() << "Cleaned result: " << cooResult;
+			currentStatus = SimbadCoordinateLookupFinished;
+		}
+		else
+		{
+			line = reply->readLine();
+			line.chop(1); // Remove a line break at the end
+			while (!line.isEmpty())
 			{
-				reply->readLine();
-				line = reply->readLine();
-				line.chop(1); // Remove a line break at the end
-				continue;
-			}
-			QList<QByteArray> l = line.split(' ');
-			if (l.size()!=2)
-			{
-				currentStatus = SimbadLookupErrorOccured;
-				errorString = q_("Error parsing position");
-				emit statusChanged();
-				return;
-			}
-			else
-			{
-				bool ok1, ok2;
-				const double ra = l[0].toDouble(&ok1)*M_PI/180.;
-				const double dec = l[1].toDouble(&ok2)*M_PI/180.;
-				if (ok1==false || ok2==false)
+				if (line=="No Coord.")
+				{
+					reply->readLine();
+					line = reply->readLine();
+					line.chop(1); // Remove a line break at the end
+					continue;
+				}
+				QList<QByteArray> l = line.split(' ');
+				if (l.size()!=2)
 				{
 					currentStatus = SimbadLookupErrorOccured;
 					errorString = q_("Error parsing position");
 					emit statusChanged();
 					return;
 				}
-				Vec3d v;
-				StelUtils::spheToRect(ra, dec, v);
+				else
+				{
+					bool ok1, ok2;
+					const double ra = l[0].toDouble(&ok1)*M_PI/180.;
+					const double dec = l[1].toDouble(&ok2)*M_PI/180.;
+					if (ok1==false || ok2==false)
+					{
+						currentStatus = SimbadLookupErrorOccured;
+						errorString = q_("Error parsing position");
+						emit statusChanged();
+						return;
+					}
+					Vec3d v;
+					StelUtils::spheToRect(ra, dec, v);
+					line = reply->readLine();
+					line.chop(1); // Remove a line break at the end
+					line.replace("NAME " ,"");
+					resultPositions[line.simplified()]=v; // Remove an extra spaces
+				}
 				line = reply->readLine();
 				line.chop(1); // Remove a line break at the end
-				line.replace("NAME " ,"");
-				resultPositions[line.simplified()]=v; // Remove an extra spaces
 			}
-			line = reply->readLine();
-			line.chop(1); // Remove a line break at the end
+			currentStatus = SimbadLookupFinished;
 		}
-		currentStatus = SimbadLookupFinished;
+		emit statusChanged();
 	}
-	emit statusChanged();
 }
 
 // Get a I18n string describing the current status.
@@ -174,7 +174,7 @@ QString SimbadLookupReply::getCurrentStatusString() const
 		case SimbadLookupFinished:
 			return resultPositions.isEmpty() ? q_("Not found") : q_("Found");
 		case SimbadCoordinateLookupFinished:
-			return resultIDs.isEmpty() ? q_("Not found") : q_("Found");
+			return cooResult.isEmpty() ? q_("Not found") : q_("Found");
 	}
 	return QString();
 }
@@ -200,7 +200,8 @@ SimbadLookupReply* SimbadSearcher::lookup(const QString& serverUrl, const QStrin
 }
 
 // Lookup in Simbad for the passed object coordinates.
-SimbadLookupReply* SimbadSearcher::lookupCoords(const QString& serverUrl, const Vec3d coordsJ2000, int maxNbResult, int delayMs)
+SimbadLookupReply* SimbadSearcher::lookupCoords(const QString& serverUrl, const Vec3d coordsJ2000, int maxNbResult, int delayMs,
+						int radius, bool IDs, bool types, bool spectrum, bool morpho, bool dim)
 {
 	double ra, de;
 	StelUtils::rectToSphe(&ra, &de, coordsJ2000);
@@ -215,10 +216,21 @@ SimbadLookupReply* SimbadSearcher::lookupCoords(const QString& serverUrl, const 
 
 	// Create the Simbad query
 	QString url(serverUrl);
-	// The result format could be enriched! http://simbad.u-strasbg.fr/simbad/sim-help?Page=sim-fscript#Formats
-	QString query = "format object \"%4.2COO(s;A D) --- %IDLIST(1)\\nIdentifiers:\\n%IDLIST[%-30* | %-30*\\n]\"\n";
+	// The query format could be enriched! http://simbad.u-strasbg.fr/simbad/sim-help?Page=sim-fscript#Formats
+	// NOTE: Newlines and other specials must be coded with double-backslash!
+	QString query = "format object \""
+			"At coords (J2000.0) %-20COO(s:;A D):\\n"
+			"Object: %IDLIST(1) (%OTYPE(V))\\n"
+			"Distance from query: %5.2DIST arcsec\\n";
+	if (IDs)      query += "Other Identifiers:\\n%IDLIST[ - %-50* \\n]";
+	if (types)    query += "Object Type(s): %OTYPELIST(V)\\n";
+	if (spectrum) query += "Spectral Type: %SP(S)\\n";
+	if (morpho)   query += "Morph. Type: %MT(M)\\n";
+	if (dim)      query += "Dimensions: %3.1DIM(X)'x%3.1DIM(Y)' at %3.0DIM(A) degrees\\n";
+	query += "\\n\\n\"\n"; // add 2 newlines at end of each record
 	query += QString("set epoch J2000\nset limit %1\n query coo ").arg(maxNbResult);
-	query += rastring + " " + destring + " radius=1m ";
+	query += rastring + " " + destring;
+	query += QString(" radius=%1s ").arg(radius);
 	QByteArray ba = QUrl::toPercentEncoding(query, "", "");
 
 	url += "simbad/sim-script?script=";

@@ -719,7 +719,7 @@ void StelPainter::drawText(float x, float y, const QString& str, float angleDeg,
 		for (int i=0;i<4;i++)
 		{
 			texCoords[i*2+0] = static_cast<float>(tex->getTexSize().width()) * (i % 2);
-			texCoords[i*2+1] = static_cast<float>(tex->getTexSize().height()) * (1 - i / 2);
+			texCoords[i*2+1] = static_cast<float>(tex->getTexSize().height()) * (1 - static_cast<float>(i) / 2);
 		}
 		setTexCoordPointer(2, GL_FLOAT, texCoords);
 
@@ -749,7 +749,7 @@ void StelPainter::drawText(float x, float y, const QString& str, float angleDeg,
 		QFont tmpFont = currentFont;
 		tmpFont.setPixelSize(currentFont.pixelSize()*static_cast<int>(static_cast<float>(prj->getDevicePixelsPerPixel())*StelApp::getInstance().getGlobalScalingRatio()));
 		painter.setFont(tmpFont);
-		painter.setPen(QColor(qRound(currentColor[0]*255), qRound(currentColor[1]*255), qRound(currentColor[2]*255), qRound(currentColor[3]*255)));
+		painter.setPen(currentColor.toQColor());
 		
 		float scaleRatio = StelApp::getInstance().getGlobalScalingRatio();
 		xshift*=scaleRatio;
@@ -1815,9 +1815,9 @@ void StelPainter::drawLine2d(const float x1, const float y1, const float x2, con
 ///////////////////////////////////////////////////////////////////////////
 // Drawing methods for general (non-linear) mode.
 // This used to draw a full sphere. Since 0.13 it's possible to have a spherical zone only.
-void StelPainter::sSphere(const double radius, double oneMinusOblateness,
-			  unsigned int slices, unsigned int stacks,
-			  const int orientInside, const bool flipTexture, const float topAngle, const float bottomAngle)
+void StelPainter::sSphere(const double radius, const double oneMinusOblateness,
+			  const unsigned int slices, const unsigned int stacks,
+			  const bool orientInside, const bool flipTexture, const float topAngle, const float bottomAngle)
 {
 	double x, y, z;
 	GLfloat s=0.f, t=0.f;

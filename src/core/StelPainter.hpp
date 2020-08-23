@@ -90,7 +90,7 @@ public:
 	//! Draw the string at the given position and angle with the given font.
 	//! If the gravity label flag is set, uses drawTextGravity180.
 	//! @param x horizontal position of the lower left corner of the first character of the text in pixel.
-	//! @param y horizontal position of the lower left corner of the first character of the text in pixel.
+	//! @param y vertical position of the lower left corner of the first character of the text in pixel.
 	//! @param str the text to print.
 	//! @param angleDeg rotation angle in degree. Rotation is around x,y.
 	//! @param xshift shift in pixel in the rotated x direction.
@@ -126,7 +126,7 @@ public:
 	//! Draw a great circle arc between points start and stop.
 	//! The angle between start and stop must be < 180 deg.
 	//! The algorithm ensures that the line will look smooth, even for non linear distortion.
-	//! Each time the small circle crosses the edge of the viewport, the viewportEdgeIntersectCallback is called with the
+	//! Each time the great circle crosses the edge of the viewport, the viewportEdgeIntersectCallback is called with the
 	//! screen 2d position, direction of the currently drawn arc toward the inside of the viewport.
 	//! @param clippingCap if not set to Q_NULLPTR, tells the painter to try to clip part of the region outside the cap.
 	void drawGreatCircleArc(const Vec3d& start, const Vec3d& stop, const SphericalCap* clippingCap=Q_NULLPTR, void (*viewportEdgeIntersectCallback)(const Vec3d& screenPos, const Vec3d& direction, void* userData)=Q_NULLPTR, void* userData=Q_NULLPTR);
@@ -165,10 +165,10 @@ public:
 	void drawPoint2d(float x, float y);
 
 	//! Draw a line between the 2 points.
-	//! @param x1 x position of point 1 in the viewport in pixels.
-	//! @param y1 y position of point 1 in the viewport in pixels.
-	//! @param x2 x position of point 2 in the viewport in pixels.
-	//! @param y2 y position of point 2 in the viewport in pixels.
+	//! @param x1 x position of point 1 in the viewport in pixels. 0 is at left.
+	//! @param y1 y position of point 1 in the viewport in pixels. 0 is at bottom.
+	//! @param x2 x position of point 2 in the viewport in pixels. 0 is at left.
+	//! @param y2 y position of point 2 in the viewport in pixels. 0 is at bottom.
 	void drawLine2d(float x1, float y1, float x2, float y2);
 
 	//! Draw a rectangle using the current texture at the given projected 2d position.
@@ -195,9 +195,9 @@ public:
 	//!        region around the bottom pole, like for a spherical equirectangular horizon panorama (SphericalLandscape class).
 	//!        Example: your light pollution image (pano photo) goes down to just -5 degrees altitude (lowest street lamps below you):
 	//!        bottomAngle = 95 degrees = 95*M_PI/180.0f
-	void sSphere(double radius, double oneMinusOblateness, unsigned int slices, unsigned int stacks,
-		     int orientInside = 0, bool flipTexture = false,
-		     float topAngle = 0.0f, float bottomAngle = static_cast<float>(M_PI));
+	void sSphere(const double radius, const double oneMinusOblateness, const unsigned int slices, const unsigned int stacks,
+		     const bool orientInside = false, const bool flipTexture = false,
+		     const float topAngle = 0.0f, const float bottomAngle = static_cast<float>(M_PI));
 
 	//! Generate a StelVertexArray for a sphere.
 	//! @param radius
@@ -266,6 +266,8 @@ public:
 
 	//! Sets the line width. Default is 1.0f.
 	void setLineWidth(float width);
+	//! Gets the line width.
+	float getLineWidth() const {return glState.lineWidth;}
 
 	//! Sets the color saturation effect value, from 0 (grayscale) to 1 (no effect).
 	void setSaturation(float v) { saturation = v; }

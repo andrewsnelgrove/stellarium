@@ -126,8 +126,7 @@ void ExoplanetsDialog::createDialogContent()
 	connect(ui->TitleBar, SIGNAL(movedTo(QPoint)), this, SLOT(handleMovedTo(QPoint)));
 
 	connect(ui->restoreDefaultsButton, SIGNAL(clicked()), this, SLOT(restoreDefaults()));
-	connect(ui->saveSettingsButton, SIGNAL(clicked()), this, SLOT(saveSettings()));
-	connect(StelApp::getInstance().getCore(), SIGNAL(configurationDataSaved()), this, SLOT(saveSettings()));
+	connect(ui->saveSettingsButton, SIGNAL(clicked()), this, SLOT(saveSettings()));	
 	connect(ui->plotDiagram, SIGNAL(clicked()), this, SLOT(drawDiagram()));
 
 	populateTemperatureScales();
@@ -285,7 +284,7 @@ void ExoplanetsDialog::setInfoHtml(void)
 	html += QString("<li><strong>%1</strong> (%2) &mdash; %3</li>").arg(trans.qtranslate("Tapecue"), "HD 63765", q_("Tapecue means eternal path in Guarani and represents the Milky Way through which the first inhabitants of the Earth arrived and could return."));
 	html += QString("<li><strong>%1</strong> (%2) &mdash; %3</li>").arg(trans.qtranslate("Yvaga"), "HD 63765 b", q_("Yvaga means paradise for the Guarani and the Milky Way was known as the road to Yvaga or paradise."));
 	html += QString("<li><strong>%1</strong> (%2) &mdash; %3</li>").arg(trans.qtranslate("Bosona"), "HD 206610", q_("Bosona is the name given to the territory of Bosnia in the 10th century. Later, the name was transformed to Bosnia originating from the name of the Bosna river."));
-	html += QString("<li><strong>%1</strong> (%2) &mdash; %3</li>").arg(trans.qtranslate("Naron"), "HD 206610 b", q_("Naron is one of the names given to the Neretva river in Herzegovina (and partly in Croatia) in antiquity orginating with the Celts who called it Nera Etwa which means the Flowing Divinity."));
+	html += QString("<li><strong>%1</strong> (%2) &mdash; %3</li>").arg(trans.qtranslate("Naron"), "HD 206610 b", q_("Naron is one of the names given to the Neretva river in Herzegovina (and partly in Croatia) in antiquity originating with the Celts who called it Nera Etwa which means the Flowing Divinity."));
 	html += QString("<li><strong>%1</strong> (%2) &mdash; %3</li>").arg(trans.qtranslate("Tupi"), "HD 23079", q_("Tupi is the name of the most populous Indigenous People living on the eastern coast of South America, before the Portuguese arrived in the 16th century."));
 	html += QString("<li><strong>%1</strong> (%2) &mdash; %3</li>").arg(trans.qtranslate("Guarani"), "HD 23079 b", q_("Guarani is the name of the most populous Indigenous people living in South Brazil and parts of Argentina, Paraguay and Uruguay."));
 	html += QString("<li><strong>%1</strong> (%2) &mdash; %3</li>").arg(trans.qtranslate("Gumala"), "HD 179949", q_("Gumala is a Malay word, which means a magic bezoar stone found in snakes, dragons, etc."));
@@ -450,7 +449,7 @@ void ExoplanetsDialog::setInfoHtml(void)
 	html += QString("<li><strong>%1</strong> (%2) &mdash; %3</li>").arg(trans.qtranslate("Krotoa"), "WASP-62 b", q_("Krotoa is considered the Mother of Africa and member of the indigenous Khoi people, who was a community builder and educator during colonial times."));
 	html += QString("<li><strong>%1</strong> (%2) &mdash; %3</li>").arg(trans.qtranslate("Baekdu"), "8 Umi", q_("Baekdu is the highest mountain on the Korean peninsula, situated in North Korea, and symbolises the national spirit of Korea."));
 	html += QString("<li><strong>%1</strong> (%2) &mdash; %3</li>").arg(trans.qtranslate("Halla"), "8 Umi b", q_("Halla is the highest mountain in South Korea and is regarded as a sacred place in the region."));
-	html += QString("<li><strong>%1</strong> (%2) &mdash; %3</li>").arg(trans.qtranslate("Rosalíadecastro"), "HD 149143", q_("Rosalía de Castro was a significant figure of Galician culture and prominent Spanish writer, whose pioneeting work often referenced the night and celestial objects."));
+	html += QString("<li><strong>%1</strong> (%2) &mdash; %3</li>").arg(trans.qtranslate("Rosalíadecastro"), "HD 149143", q_("Rosalía de Castro was a significant figure of Galician culture and prominent Spanish writer, whose pioneering work often referenced the night and celestial objects."));
 	html += QString("<li><strong>%1</strong> (%2) &mdash; %3</li>").arg(trans.qtranslate("Riosar"), "HD 149143 b", q_("Rio Sar is the name of a river that was present in much of the literary work of the pioneering Spanish author Rosalía de Castro."));
 	html += QString("<li><strong>%1</strong> (%2) &mdash; %3</li>").arg(trans.qtranslate("Sāmaya"), "HD 205739", q_("Sāmaya means peace in the Sinhalese language."));
 	html += QString("<li><strong>%1</strong> (%2) &mdash; %3</li>").arg(trans.qtranslate("Samagiya"), "HD 205739 b", q_("Samagiya means togetherness and unity in the Sinhalese language."));
@@ -645,6 +644,7 @@ void ExoplanetsDialog::updateCompleteReceiver(void)
 	ui->lastUpdateDateTimeEdit->setDateTime(ep->getLastUpdate());
 	QTimer *timer = new QTimer(this);
 	connect(timer, SIGNAL(timeout()), this, SLOT(refreshUpdateValues()));
+	setAboutHtml();
 }
 
 void ExoplanetsDialog::restoreDefaults(void)
@@ -764,7 +764,7 @@ void ExoplanetsDialog::populateDiagramsList()
 	axisX->clear();
 	axisY->clear();
 
-	static const QList<axisPair> axis = {
+	const QList<axisPair> axis = {
 	{ q_("Orbital Eccentricity"),          0},
 	{ q_("Orbit Semi-Major Axis, AU"),     1},
 	{ q_("Planetary Mass, Mjup"),          2},

@@ -5,6 +5,8 @@
 [Setup]
 @ISS_ARCHITECTURE_SPECIFIC@
 DisableStartupPrompt=yes
+DisableDirPage=no
+DisableProgramGroupPage=no
 WizardSmallImageFile=@CMAKE_SOURCE_DIR@\data\icon.bmp
 WizardImageFile=@CMAKE_SOURCE_DIR@\data\splash.bmp
 WizardImageStretch=no
